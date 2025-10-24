@@ -121,15 +121,15 @@ async def query_llm(
 
     context_text = "\n\n".join(chunks)
     prompt = f"""
-You are a helpful assistant. Use the context below to answer the question.
-Provide only **one to four concise sentence** as the answer. Do NOT include reasoning, steps, or extra text.
+        You are a helpful assistant. Use the context below to answer the question.No other than the context is allowed to be used to answer the question.
+        Provide only **one to four concise sentence** as the answer. Do NOT include reasoning, steps, or extra text.
 
-Context:
-{context_text}
+        Context:
+        {context_text}
 
-Question: {query}
-Answer:
-"""
+        Question: {query}
+        Answer:
+    """
 
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
     payload = {
@@ -206,15 +206,15 @@ async def query_llm_api(
 
     # 2️⃣ Prepare prompt for LLM
     prompt = f"""
-You are a helpful assistant. Use the context below to answer the question.
-Provide only one to four concise sentences as the answer. Do NOT include reasoning, steps, or extra text.
+        You are a helpful assistant. Use the context below to answer the question.No other than the context is allowed to be used to answer the question.
+        Provide only one to four concise sentences as the answer. Do NOT include reasoning, steps, or extra text.
 
-Context:
-{context_text}
+        Context:
+        {context_text}
 
-Question: {query}
-Answer:
-"""
+        Question: {query}
+        Answer:
+    """
 
     # 3️⃣ Call Groq LLM
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}"}
@@ -227,7 +227,23 @@ Answer:
 
     resp = requests.post(GROQ_ENDPOINT, headers=headers, json=payload)
     if resp.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Groq API call failed: {resp.status_code} {resp.text}")
+        error_text = resp.text
+
+        if "Request too large" in error_text or "413" in error_text:
+            return {
+                "llm_response": "⚠ Response too large for this plan (limit 6000 tokens). Please shorten your input or upgrade your Groq plan."
+            }
+        elif "rate_limit_exceeded" in error_text:
+            return {
+                "llm_response": "⚠ Rate limit exceeded. Please wait a few seconds and try again."
+            }
+        elif "limit 6000" in error_text:
+            return {
+                "llm_response": "⚠ Request exceeded 6000 token limit. Try reducing context or question size."
+            }
+        else:
+            raise HTTPException(status_code=500, detail=f"Groq API call failed: {resp.status_code} {error_text}")
+
 
     result = resp.json()
     output_texts = [
